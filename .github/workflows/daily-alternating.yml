@@ -33,7 +33,6 @@ jobs:
             exit 0
           fi
 
-          TARGET="skip"
           if [ $((10#$DOY % 2)) -eq 0 ]; then
             TARGET="10:00"
           else
@@ -41,19 +40,16 @@ jobs:
           fi
 
           if [ "$TARGET" = "$HOUR_MIN" ]; then
-            echo "Orario OK ($HOUR_MIN), target $TARGET, procedo."
             echo "run=true" >> $GITHUB_OUTPUT
           else
-            echo "Orario $HOUR_MIN non corrisponde al target $TARGET: stop."
             echo "run=false" >> $GITHUB_OUTPUT
           fi
 
-            - name: Aggiorna file heartbeat (solo se run=true)
+      - name: Aggiorna file heartbeat (solo se run=true)
         if: steps.gate.outputs.run == 'true'
         shell: bash
         run: |
-          PULSE=".pulse"
-          echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "$PULSE"
+          echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > .pulse
 
       - name: Commit & Push (solo se ci sono modifiche)
         if: steps.gate.outputs.run == 'true'
