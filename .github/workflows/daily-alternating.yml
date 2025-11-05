@@ -18,21 +18,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Decide se eseguire (alternanza + orario locale + no domenica)
+            - name: Decide se eseguire (alternanza + orario locale + no domenica)
         id: gate
         shell: bash
         run: |
+          EVENT="${GITHUB_EVENT_NAME:-}"
           NOW_LOCAL=$(TZ=Europe/Berlin date +'%H:%M %u %j')
           HOUR_MIN=$(echo "$NOW_LOCAL" | awk '{print $1}')
           DOW=$(echo "$NOW_LOCAL" | awk '{print $2}')
           DOY=$(echo "$NOW_LOCAL" | awk '{print $3}')
 
+          # No domenica
           if [ "$DOW" -eq 7 ]; then
             echo "E' domenica: stop."
             echo "run=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
+          # Se lanciato manualmente (workflow_dispatch), bypassa l'orario/alternanza
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "Run manuale: bypass orario/alternanza."
+            echo "run=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Alternanza: pari -> 10:00, dispari -> 15:15
           if [ $((10#$DOY % 2)) -eq 0 ]; then
             TARGET="10:00"
           else
@@ -44,6 +54,7 @@ jobs:
           else
             echo "run=false" >> $GITHUB_OUTPUT
           fi
+
 
       - name: Aggiorna file heartbeat (solo se run=true)
         if: steps.gate.outputs.run == 'true'
