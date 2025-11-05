@@ -48,28 +48,12 @@ jobs:
             echo "run=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Aggiorna README (solo se run=true)
+            - name: Aggiorna file heartbeat (solo se run=true)
         if: steps.gate.outputs.run == 'true'
         shell: bash
         run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          START="<!-- LAST-UPDATE-START -->"
-          END="<!-- LAST-UPDATE-END -->"
-          LINE="**Ultimo aggiornamento (UTC):** ${TODAY}"
-
-          if ! grep -q "$START" README.md; then
-            {
-              echo ""
-              echo "$START"
-              echo "$LINE"
-              echo "$END"
-            } >> README.md
-          else
-            awk -v s="$START" -v e="$END" -v l="$LINE" '
-              $0 ~ s {print; getline; print l; getline; print e; next}
-              {print}
-            ' README.md > README.tmp && mv README.tmp README.md
-          fi
+          PULSE=".pulse"
+          echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "$PULSE"
 
       - name: Commit & Push (solo se ci sono modifiche)
         if: steps.gate.outputs.run == 'true'
@@ -78,8 +62,8 @@ jobs:
           if [[ -n "$(git status --porcelain)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md
-            git commit -m "chore: alternating update $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git add .pulse
+            git commit -m "chore: heartbeat"
             git push
           else
             echo "Nessuna modifica."
