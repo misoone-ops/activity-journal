@@ -1,0 +1,86 @@
+name: Alternating Daily Update (10:00 / 15:15, skip Sunday)
+
+on:
+  schedule:
+    - cron: "0 8 * * 1-6"
+    - cron: "0 9 * * 1-6"
+    - cron: "15 13 * * 1-6"
+    - cron: "15 14 * * 1-6"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Decide se eseguire (alternanza + orario locale + no domenica)
+        id: gate
+        shell: bash
+        run: |
+          NOW_LOCAL=$(TZ=Europe/Berlin date +'%H:%M %u %j')
+          HOUR_MIN=$(echo "$NOW_LOCAL" | awk '{print $1}')
+          DOW=$(echo "$NOW_LOCAL" | awk '{print $2}')
+          DOY=$(echo "$NOW_LOCAL" | awk '{print $3}')
+
+          if [ "$DOW" -eq 7 ]; then
+            echo "E' domenica: stop."
+            echo "run=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TARGET="skip"
+          if [ $((10#$DOY % 2)) -eq 0 ]; then
+            TARGET="10:00"
+          else
+            TARGET="15:15"
+          fi
+
+          if [ "$TARGET" = "$HOUR_MIN" ]; then
+            echo "Orario OK ($HOUR_MIN), target $TARGET, procedo."
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "Orario $HOUR_MIN non corrisponde al target $TARGET: stop."
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Aggiorna README (solo se run=true)
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+          START="<!-- LAST-UPDATE-START -->"
+          END="<!-- LAST-UPDATE-END -->"
+          LINE="**Ultimo aggiornamento (UTC):** ${TODAY}"
+
+          if ! grep -q "$START" README.md; then
+            {
+              echo ""
+              echo "$START"
+              echo "$LINE"
+              echo "$END"
+            } >> README.md
+          else
+            awk -v s="$START" -v e="$END" -v l="$LINE" '
+              $0 ~ s {print; getline; print l; getline; print e; next}
+              {print}
+            ' README.md > README.tmp && mv README.tmp README.md
+          fi
+
+      - name: Commit & Push (solo se ci sono modifiche)
+        if: steps.gate.outputs.run == 'true'
+        shell: bash
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "chore: alternating update $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          else
+            echo "Nessuna modifica."
+          fi
